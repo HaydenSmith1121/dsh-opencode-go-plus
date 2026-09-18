@@ -1,0 +1,47 @@
+# Migration helper: retire the package this one is derived from.
+#
+# `dsh-opencode-go` (https://github.com/Duskriver/dsh-opencode-go) is bundled by
+# every profile that installed it, under the plugin id `opencode-go`. It and
+# this package claim the SAME settings namespace (`llm-opencode-go`) and the
+# SAME provider route (`opencode-go`), and share neither. Whichever bundle
+# loads first gets both.
+#
+# Measured on 2026-09-17, dsh 0.1.6-alpha.1, Windows / Node 24.14.0, with both
+# packages installed in one profile:
+#
+#   plus first, baseline second  -> baseline throws DUPLICATE_DISCOVERY from
+#                                   the loader's own effect, UNCAUGHT:
+#                                   `dsh web` fails to boot entirely, and every
+#                                   other plugin in the profile goes down with
+#                                   it. Exit code 1.
+#   baseline first, plus second  -> plus detects the collision and goes inert:
+#                                   `dsh web` starts, the baseline serves 37
+#                                   models, the reason is only in the log
+#                                   channel. No error on the console.
+#
+# So the supported migration is to remove the baseline, not to shadow it:
+#
+#   dsh plugin --profile web remove dsh-opencode-go
+#   dsh plugin --profile web add ./dsh-opencode-go-plus-0.2.0.tgz
+#
+# Verify by COUNT, not by absence of errors: 38 models including `union-alpha`
+# means this package is serving; 37 without `union-alpha` means the baseline
+# still is.
+#
+# This file covers the one case where keeping both is useful — comparing the two
+# catalogs side by side. Applied as a profile patch it disables the baseline
+# entry, so this package claims the namespace and route deterministically:
+#
+#   dsh --profile web --patch ./migrate-from-fork.patch.yml
+#
+# The disable must be applied this way, as a patch overlay. Merely installing
+# both in the other order is the crash case above.
+#
+# Mind which identifier you patch. `opencode-go` is the baseline's *plugin id*
+# (what its bundle manifest inserts). `llm-opencode-go` is the *settings
+# namespace* the baseline owns, and it must stay untouched: this package keeps
+# the same namespace on purpose, so an existing API key and configuration
+# survive the migration. Patching the namespace instead of the plugin id does
+# nothing.
+- id: opencode-go
+  disabled: true

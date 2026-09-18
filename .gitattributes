@@ -1,0 +1,12 @@
+# 行尾一律 LF。
+#
+# 不是洁癖：`lib/` 是构建产物，必须与已发布 tarball 里的字节逐字节一致。
+# 行尾被自动转换会让「同一份源码在 Windows 与 Linux 上打出的包不是同一个字节」。
+* text=auto eol=lf
+
+# 二进制：绝不能被当作文本处理
+*.tgz binary
+*.gz binary
+*.png binary
+*.jpg binary
+*.ico binary

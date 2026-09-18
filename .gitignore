@@ -1,0 +1,14 @@
+# npm pack 产物
+*.tgz
+
+# 依赖
+node_modules/
+
+# 校验脚本的临时目录
+.tmp/
+.tmp-verify/
+
+# 编辑器 / 系统噪音
+*.log
+.DS_Store
+Thumbs.db

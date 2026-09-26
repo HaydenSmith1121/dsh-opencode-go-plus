@@ -1,6 +1,6 @@
 {
   "name": "dsh-opencode-go-plus",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "description": "OpenCode Go model provider for DeepSeek Harness — a maintained fork that keeps the live model catalog reachable when another adapter already owns the opencode-go route, no longer drops models belonging to families the catalog has not seen before, configures itself from the Settings → Models page instead of a settings section of its own, and runs unchanged across the dsh 0.1.6 and 0.1.7 release trains, including their prereleases",
   "type": "module",
   "license": "MIT",

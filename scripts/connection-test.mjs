@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { createConnectionStatus } from '../lib/connection-status.js';
 import { parseConnectionStatus, connectionRemote } from '../lib/connection-contract.js';
 import { ConnectionController } from './client/connection-controller.js';
@@ -50,6 +51,42 @@ test('wire codec strips unexpected secret fields and rejects unknown states',()=
   assert.throws(()=>parseConnectionStatus({...base,connection:'logged-in'}));
   assert.deepEqual(connectionRemote.descriptors.map(d=>d.method),['status','refresh']);
 });
+test('a status field the card does not need can never blank the card',()=>{
+  // `writable` gates the key input and `route`/counts only decorate; defaulting
+  // them keeps a card that has a status to show renderable, where the strict
+  // read this replaced returned nothing at all.
+  assert.deepEqual(parseConnectionStatus({connection:'missing'}),{configured:false,writable:true,enabled:true,ref:'',route:'',connection:'missing',modelCount:0,checkedAt:0,httpStatus:0});
+  assert.equal(parseConnectionStatus({...base,enabled:'yes',modelCount:-1,checkedAt:Number.NaN}).modelCount,0);
+  assert.throws(()=>parseConnectionStatus(undefined));
+});
+test('an unreadable credential store reports an actionable state instead of failing the RPC',async()=>{
+  const {service}=setup({describe:async()=>{throw new Error('store busy');}});
+  assert.deepEqual(await service.status(),{...base,configured:false,writable:true,connection:'missing'});
+  assert.equal((await service.refresh()).connection,'missing');
+});
+test('a first read that fails keeps retrying until a status lands',async()=>{
+  let attempts=0;
+  const c=new ConnectionController({status:async()=>{if(++attempts<3)throw new Error('gateway not up');return {...base,connection:'missing'};}},{retryBaseMs:1,retryMaxMs:1});
+  await c.read();
+  assert.equal(c.state.status,null);assert.equal(c.state.error,'refresh-failed');
+  for(let wait=0;wait<50&&c.state.status===null;wait++)await new Promise(resolve=>setTimeout(resolve,5));
+  assert.equal(attempts,3);assert.equal(c.state.status.connection,'missing');assert.equal(c.state.error,'');
+  c.dispose();
+});
+test('a failed refresh of a known status does not erase it or retry forever',async()=>{
+  let attempts=0;
+  const c=new ConnectionController({status:async()=>{attempts++;return attempts===1?base:Promise.reject(new Error('gone'));}},{retryBaseMs:1,retryMaxMs:1});
+  await c.read();assert.equal(c.state.status.connection,'configured');
+  await c.read();assert.equal(c.state.error,'refresh-failed');assert.equal(c.state.status.connection,'configured');
+  await new Promise(resolve=>setTimeout(resolve,20));
+  assert.equal(attempts,2);c.dispose();
+});
+test('a stalled read is reported instead of leaving the card reading forever',async()=>{
+  const c=new ConnectionController({status:()=>new Promise(()=>{})},{readTimeoutMs:5});
+  await c.read();
+  assert.equal(c.state.status,null);assert.equal(c.state.error,'refresh-failed');assert.equal(c.state.busy,'');
+  c.dispose();
+});
 test('save uses the effective credential ref, trims key and checks afterward',async()=>{
   const calls=[];
   const controller=new ConnectionController({status:async()=>base,set:async(...args)=>{calls.push(args);},refresh:async()=>({...base,connection:'ready',modelCount:2})});
@@ -72,4 +109,17 @@ test('duplicate actions are blocked and late responses cannot update an unmounte
   const c=new ConnectionController({status:()=>new Promise(resolve=>{done=resolve;})});
   const pending=c.read();assert.equal(await c.refresh(),false);c.dispose();done(base);await pending;assert.equal(c.state.status,null);
   c.activate();assert.equal(c.state.busy,'');
+});
+test('the collapsed card really hides its body in the shipped bundle',async()=>{
+  // A details child that sets its own `display` outranks the UA's
+  // `details:not([open])>:not(summary){display:none}`, so the chevron would rotate
+  // while the form stayed on screen. Whatever the card builds must therefore also
+  // carry an explicit closed-state rule; assert it against the built bundle, which
+  // is what actually ships.
+  const bundle=await readFile(new URL('../lib/client.js',import.meta.url),'utf8');
+  const card=bundle.slice(bundle.indexOf('BEGIN GENERATED CONNECTION CARD'),bundle.indexOf('END GENERATED CONNECTION CARD'));
+  assert.ok(card.length>0,'the built bundle embeds the card');
+  const body=/\.ocg-body\{[^}]*display:/.exec(card);
+  if(body)assert.match(card,/\.ocg-connection:not\(\[open\]\)>\.ocg-body\{display:none\}/);
+  assert.match(card,/"details"/);
 });

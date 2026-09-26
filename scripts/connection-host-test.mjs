@@ -8,6 +8,7 @@ test('0.1.7 host: connection RPC mounts and manual refresh repairs route and mod
   const hook=registerHooks({resolve(specifier,context,next){return next(specifier,specifier.startsWith('@deepseek-ai/')?{...context,parentURL:hostUrl}:context);}});
   const {Context,Service}=await import('@deepseek-ai/cordis');
   const {TypertRegistry}=await import('@deepseek-ai/dsh-typert-registry');
+  const {TypertGatewayService}=await import('@deepseek-ai/dsh-api-gateway');
   const plugin=await import(process.env.PLUGIN_TEST_ROOT ? pathToFileURL(join(resolve(process.env.PLUGIN_TEST_ROOT),'lib/index.js')).href : '../lib/index.js');
   const routes=new Map([['opencode-go',{}]]);
   let key='',modelRequests=0,directoryUpdates=0;
@@ -35,10 +36,16 @@ test('0.1.7 host: connection RPC mounts and manual refresh repairs route and mod
   };
   try{
     await ctx.plugin(TypertRegistry);
+    await ctx.plugin(TypertGatewayService, {});
     await ctx.plugin(Llm);
     await ctx.plugin(Credentials);
     await ctx.plugin(plugin,{});
-    const connection=ctx.opencodeGoConnection;
+    const connection={};
+    for(const method of ['status','refresh']) connection[method]=async()=>{
+      const reply=await ctx.typertGateway.invokeRpc('opencodeGoConnection/'+method,{args:{}},new AbortController().signal);
+      assert.equal(reply.ok,true,JSON.stringify(reply));
+      return reply.value;
+    };
     assert.equal((await connection.status()).connection,'missing');
     assert.ok(ctx.typert.local.list().some(d=>d.method==='refresh'));
     assert.equal(routes.has('opencode-go-plus'),false);

@@ -193,3 +193,36 @@ scripts/connection-host-test.mjs (set HARNESS_TEST_MODULES for host checks).
 The published client was also exercised in Chrome with mocked RPC responses,
 including missing keys, saving, 401, transport errors, React StrictMode and mobile
 layout. Actual paid-account authentication was not performed.
+
+## 0.4.3 — the card stops reading forever, accepts a key, and folds
+
+Three symptoms reported from the desktop build traced to the browser half alone;
+the host RPC was re-checked end to end against the real 0.1.7-rc.2 tree and was
+sound.
+
+The key field was disabled whenever the card had no status yet, so a first
+status() that rejected — host not up, gateway call stalled — left the card reading
+forever with a field that silently swallowed both typing and paste. The field now
+disables only for a read-only credential or an in-flight save. Status reads are
+wrapped in a 15s deadline and retried with exponential backoff, but only while no
+status has ever arrived; once one exists, a failed refresh keeps the last known
+status and hands retrying back to the user. Note the deliberate asymmetry: the
+timeout timer must stay ref'd, because it is the only thing that turns a stalled
+call into a visible failure, while the retry timer is unref'd so it cannot hold the
+process open.
+
+The card is now a details/summary disclosure whose body collapses, matching the
+host's own disclosure styling, with a tone-coloured status line in the summary and
+the duplicated status block removed. A details child that sets its own display
+outranks the UA's closed-details rule, so the collapse rule is stated explicitly;
+the shipped bundle is asserted against it. describe() and parseConnectionStatus
+also default absent fields and an unreadable credential store into an actionable
+state instead of blanking the card or failing the RPC.
+
+Tests: node --test scripts/connection-test.mjs (21) and
+scripts/connection-host-test.mjs (1). The card was re-checked in a live dsh web
+profile: folded and unfolded, status tone, and a typed key enabling save. Real OS
+clipboard paste could not be exercised in this environment — the automation
+session has no clipboard access — so paste is covered indirectly: no paste or key
+handler is registered, the field is enabled and writable, and onChange updates
+state.

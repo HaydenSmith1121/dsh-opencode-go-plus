@@ -8,6 +8,9 @@ node_modules/
 .tmp/
 .tmp-verify/
 
+# 本地会话记忆（属于工作区数据，不进仓库、也不是缓存）
+.workbuddy/
+
 # 编辑器 / 系统噪音
 *.log
 .DS_Store

@@ -15,6 +15,22 @@
 
 ## 安装与使用
 
+### 桌面版（含 0.1.7-rc.2）
+
+在 **插件 → 添加插件 → Git 仓库** 中填写：
+
+```text
+https://github.com/HaydenSmith1121/dsh-opencode-go-plus
+```
+
+**0.4.1 起无需为本插件允许 `@google/genai`、`protobufjs` 的安装脚本。**
+OpenCode Go 使用的 OpenAI / Anthropic 协议模块已随包预编译；安装时不会再拉取完整
+`pi-ai` 的 Google / Protobuf 依赖链，也不需要本地构建。
+
+如果之前停在“需要允许安装脚本”，关闭旧安装任务，重新从上述仓库发起安装以获取
+0.4.1 或更新版本。旧任务仍可能引用旧提交；请在安装详情里确认版本。若同一 profile
+还有其他插件依赖这些包，它们的脚本提示需要单独处理。此修复不修改全局脚本策略。
+
 ### Web
 
 ```sh
@@ -304,6 +320,15 @@ dsh plugin --profile headless remove dsh-opencode-go-plus
 ```
 
 ## 更新日志
+
+### 0.4.1
+
+- 修复桌面版安装时由完整 `pi-ai` 依赖链引发的 `@google/genai` / `protobufjs`
+  脚本授权提示；仅预打包本插件使用的三种协议和 OpenCode Go 模型目录。
+- 保留模型自动发现、流式响应以及 0.1.6 / 0.1.7 的宿主兼容逻辑。
+- `pi-ai` 只作为公共 TypeScript 声明所用的**可选 peer**，运行时不再导入或安装它。
+  开发者若直接消费本包的类型，可在开发环境自行安装 `@earendil-works/pi-ai@0.85.1`。
+- 增加离线流式协议回归测试、维护者重建入口和第三方许可清单。
 
 ### 0.4.0
 

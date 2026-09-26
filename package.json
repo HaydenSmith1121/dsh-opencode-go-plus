@@ -1,6 +1,6 @@
 {
   "name": "dsh-opencode-go-plus",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "OpenCode Go model provider for DeepSeek Harness — a maintained fork that keeps the live model catalog reachable when another adapter already owns the opencode-go route, no longer drops models belonging to families the catalog has not seen before, configures itself from the Settings → Models page instead of a settings section of its own, and runs unchanged across the dsh 0.1.6 and 0.1.7 release trains, including their prereleases",
   "type": "module",
   "license": "MIT",
@@ -74,11 +74,11 @@
     "@deepseek-ai/dsh-typert-protocol": ">=0.1.6-alpha.1 <0.2.0-0 || >=0.1.7-alpha.0 <0.2.0-0",
     "@deepseek-ai/dsh-client-ui-conversation": ">=0.1.6-alpha.1 <0.2.0-0 || >=0.1.7-alpha.0 <0.2.0-0",
     "@deepseek-ai/dsh-typert-registry": ">=0.1.6-alpha.1 <0.2.0-0 || >=0.1.7-alpha.0 <0.2.0-0",
-    "@deepseek-ai/schemastery": ">=3.18.2 <4.0.0"
+    "@deepseek-ai/schemastery": ">=3.18.2 <4.0.0",
+    "@earendil-works/pi-ai": "^0.85.1"
   },
   "dependencies": {
-    "@deepseek-ai/dsh-brand": ">=0.1.6-alpha.1 <0.2.0-0 || >=0.1.7-alpha.0 <0.2.0-0",
-    "@earendil-works/pi-ai": "^0.85.1"
+    "@deepseek-ai/dsh-brand": ">=0.1.6-alpha.1 <0.2.0-0 || >=0.1.7-alpha.0 <0.2.0-0"
   },
   "peerDependenciesMeta": {
     "@deepseek-ai/dsh-api-remotes": {
@@ -109,6 +109,9 @@
       "optional": true
     },
     "@deepseek-ai/dsh-typert-registry": {
+      "optional": true
+    },
+    "@earendil-works/pi-ai": {
       "optional": true
     }
   },

@@ -164,3 +164,12 @@ change — `package.json` (version, description, client inject list, dropped pee
 section registration and its scope/section-controller wiring removed). Every
 declaration under `lib/types/**` is unchanged, including the ones that still
 describe the section: they are additive type surface, not shipped behaviour.
+
+## 0.4.1 — script-free plugin installation
+
+The runtime now imports a checked-in, limited pi-ai bundle instead of installing the
+complete provider SDK tree. The OpenCode Go catalog and its three protocols are
+unchanged from pi-ai 0.85.1. The former runtime dependency is an optional, type-only
+peer so Harness does not install it. See [vendored runtime](vendored-runtime.md) for
+reproduction, license provenance, and checks. No lifecycle script or pnpm approval
+exception was added to the plugin.

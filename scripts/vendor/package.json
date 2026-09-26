@@ -1,0 +1,11 @@
+{
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "dependencies": {
+    "@earendil-works/pi-ai": "0.85.1",
+    "esbuild": "0.25.12"
+  }
+}

@@ -173,3 +173,23 @@ unchanged from pi-ai 0.85.1. The former runtime dependency is an optional, type-
 peer so Harness does not install it. See [vendored runtime](vendored-runtime.md) for
 reproduction, license provenance, and checks. No lifecycle script or pnpm approval
 exception was added to the plugin.
+
+## 0.4.2 — credentials and connection status inside the Models card
+
+The stock 0.1.7-rc.2 editor hardcodes the llm-deepseek and llm-pi-ai namespaces,
+so a third-party namespace displays only a configuration-file hint. The plugin
+now registers the keyed settings.models.provider-card slot for llm-opencode-go.
+It does not alter the host editor or add another settings section.
+
+The browser source lives in scripts/client; rebuild it into the existing prebuilt
+lib/client.js with node scripts/build-client.mjs after installing the maintenance
+tools in scripts/vendor. The new host connection service exposes only credential
+metadata and bounded status values. The credential write still uses the host's
+credentials service. Manual checks call the usage endpoint, then force a new live
+catalog snapshot. Model requests and installation dependencies are unchanged.
+
+Tests: node --test scripts/connection-test.mjs scripts/runtime-test.mjs
+scripts/connection-host-test.mjs (set HARNESS_TEST_MODULES for host checks).
+The published client was also exercised in Chrome with mocked RPC responses,
+including missing keys, saving, 401, transport errors, React StrictMode and mobile
+layout. Actual paid-account authentication was not performed.

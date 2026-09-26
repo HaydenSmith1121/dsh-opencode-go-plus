@@ -1,0 +1,16 @@
+import { build } from './vendor/node_modules/esbuild/lib/main.js';
+import { readFile, writeFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+const root = fileURLToPath(new URL('../', import.meta.url));
+const result = await build({ absWorkingDir:root, entryPoints:['scripts/client/connection-card.jsx'], bundle:true, platform:'browser',format:'cjs', external:['react'], write:false, target:'es2022' });
+const start='// BEGIN GENERATED CONNECTION CARD';
+const end='// END GENERATED CONNECTION CARD';
+const code=`${start}\nvar connectionCardModule = (() => { var module = { exports: {} }; var exports = module.exports;\n${result.outputFiles[0].text}\nreturn module.exports; })();\n${end}\n`;
+const path = new URL('../lib/client.js',import.meta.url);
+let client = await readFile(path,'utf8');
+const from = client.indexOf(start);
+if(from>=0) client=client.slice(0,from)+code+client.slice(client.indexOf(end,from)+end.length+1);
+else client=client.replace('// src/client/index.ts\n//\n// The standalone',code+'\n// src/client/index.ts\n//\n// The standalone');
+if(!client.includes('  connectionCardModule.registerConnectionCard(ctx);')) client=client.replace('  registerUsagePill(ctx);','  registerUsagePill(ctx);\n  connectionCardModule.registerConnectionCard(ctx);');
+await writeFile(path,client);
+console.log('Updated connection card in lib/client.js');

@@ -7,6 +7,10 @@
 网关新上线的模型会**自动适配**：插件按同族已知模型克隆协议与参数，同族不存在时退到全局最接近的模型兜底（详见下文"自动适配新模型"），无需等待目录更新。
 
 > **本包是 [`dsh-opencode-go`](https://github.com/Duskriver/dsh-opencode-go) 的维护分支**，针对两个会把模型**静默地从列表里弄丢**的场景做了修复，详见[与上游的差异](#与上游-dsh-opencode-go-的差异)。
+>
+> **支持的 harness 版本：`0.1.6-alpha.1` 及以后的 `0.1.6` / `0.1.7` 系列**（含桌面版
+> `0.1.7-rc.2`）。两个系列用不同的设置模型，本包在运行时探测并分流，无需版本豁免；
+> 见[兼容性](#兼容性)。
 
 
 ## 安装与使用
@@ -23,14 +27,15 @@ dsh plugin --profile web add dsh-opencode-go-plus
 2. 该行显示 API Key 状态（绿点 = 已配置）。
 3. 在会话的模型选择器中选择 OpenCode Go 模型。
 
-API Key 来自你的 OpenCode Go 订阅（默认引用 `OPENCODE_API_KEY`，可在
-`settings.yaml` 的 `llm-opencode-go.apiKeyEnv` 改名）。安装插件不会自动更改默认模型。
+API Key 来自你的 OpenCode Go 订阅（默认引用 `OPENCODE_API_KEY`）。改引用名的位置随
+harness 版本不同：`dsh <= 0.1.6` 在 `settings.yaml` 的 `llm-opencode-go.apiKeyEnv`，
+`dsh >= 0.1.7` 在 profile 的 `cordis.patch.yml` 中该 entry 的 `config` 里。安装插件不会
+自动更改默认模型。
 
 > **0.3.0 起，插件不再有独立的"设置 → OpenCode Go"分区。** 配置入口就是
-> **设置 → 模型** 里的 OpenCode Go 行，与其它 provider 并列。该行的"编辑"里只有
-> 通用凭据字段；`refreshMinutes`、`autoDiscover`、图片预算等插件专有字段仍在
-> `settings.yaml` 的 `llm-opencode-go` 段，行内会明确提示这一点。详见
-> [更新日志 0.3.0](#030)。
+> **设置 → 模型** 里的 OpenCode Go 行，与其它 provider 并列。`refreshMinutes`、
+> `autoDiscover`、图片预算等插件专有字段的位置同样随版本走（见上面
+> [兼容性](#兼容性)的表）。详见 [更新日志 0.3.0](#030)。
 
 ### Headless
 
@@ -92,8 +97,9 @@ dsh-opencode-go") and restart to use this package instead.
 > 且**谁先加载谁赢**：升级时请先卸载旧包，见
 > [`examples/migrate-from-fork.patch.yml`](./examples/migrate-from-fork.patch.yml)。
 >
-> 本包的退场是**安静的**：命令行上只会看到 `dsh web` 正常启动，模型数停在旧包的 37。
-> 判断依据是**模型数量**——旧包 37 条（无 `union-alpha`），本包 38 条。
+> 本包的退场是**安静的**：命令行上只会看到 `dsh web` 正常启动，模型列表停在旧包的内容。
+> 判断依据是**同族外 ID 在不在**（如 `grok-4.7`、`hy3-preview`）以及模型总数比不比基线多，
+> 不要记具体条数 —— 网关上下线模型会让它变。见[常见问题](#从-dsh-opencode-go-升级过来插件好像没生效)。
 
 ### 2. `opencode-go` 路由被占用时不再静默放弃
 
@@ -179,9 +185,50 @@ llm-opencode-go:
 
 订阅额度由插件的 usage 面板显示，路径为 `GET {baseURL}/usage`。
 
+## 兼容性
+
+本包是**预编译产物**（只发布 `lib/`，没有源码树），无法针对每个 harness 版本重新发版。
+因此它把支持的版本写进 `peerDependencies`，并在接口真的变了的地方**运行时探测能力**，
+而不是相信版本号。
+
+| dsh 版本 | 支持 | 差异 |
+|---|---|---|
+| `0.1.5-rc.3` 及更早 | **不支持** | `dsh-llm` 还没有路由侧图片 offload API，peer 范围会拒绝 |
+| `0.1.6-alpha.1` / `alpha.2` | 支持 | **旧设置模型**：`SettingsProvider`，插件配置是 `settings.yaml` 里的一个段 |
+| `0.1.7-alpha.1` … `0.1.7-rc.2`（含桌面版） | 支持 | **新设置模型**：`SettingsForms`，插件配置是 loader entry 自己的 `config` |
+| `0.2.0` 及以后 | 未声明 | peer 上界 `<0.2.0-0`，连 `0.2.0` 的预发布版一并排除 |
+
+**配置放在哪里，取决于 harness 版本**：
+
+| | `dsh <= 0.1.6` | `dsh >= 0.1.7` |
+|---|---|---|
+| 配置位置 | `settings.yaml` 的 `llm-opencode-go` 段 | profile 的 `cordis.patch.yml` 里 `llm-opencode-go` 这条 entry 的 `config` |
+| 编辑方式 | 手改 `settings.yaml`，或在设置页的分区里改 | 设置页的模型行直接生成表单（改了立刻生效，不重挂插件） |
+
+两种模型下 `apply()` 都走同一份代码：先试 `installSection`（旧），再退到
+`configure`（新），两个都没有时打一条 warning 并在日志里说明。运行时的探测项清单见
+[`docs/compatibility.md`](docs/compatibility.md)，双版本的实测证据见
+[`docs/verification.md`](docs/verification.md) § 0.4.0。
+
+**正常情况下不需要任何"兼容性豁免"。** 0.1.7 系列启动时会校验 peer 范围，而
+`0.3.0` 的精确钉版匹配不上 `0.1.7-rc.2`，必须手工放行；`0.4.0` 把范围拆成
+每列车一条后，`0.1.7-rc.2` 本身就落在范围内 —— 实测把 profile 的
+`compatibility.json` 清空为 `{}` 后，0.1.7-rc.2 照样正常加载、模型数不变。
+
+如果将来某个版本又落在范围外，启动器会打印放行命令；也可以手工执行：
+
+```sh
+dsh plugin --profile web allow-version dsh-opencode-go-plus@0.4.0 \
+  --dsh-version 0.1.7-rc.2 --accept-risk
+```
+
+豁免**只对"这个精确的包版本 + 这个精确的运行时版本"生效**，存放在
+`profiles/<name>/compatibility.json`；`dsh plugin version-exemptions` 可以列出，
+`revoke-version` 可以撤销。仅在确认过上面的差异表之后再放行。
+
 ## 配置
 
-Web 用户可直接在 **设置 → OpenCode Go** 中修改配置。启用开关立即生效。
+Web 用户可直接在 **设置 → 模型** 里找到 **OpenCode Go** 一行，从那里改配置。启用开关立即生效。
 
 ## 常见问题
 
@@ -193,14 +240,25 @@ Web 用户可直接在 **设置 → OpenCode Go** 中修改配置。启用开关
 
 | 现象 | 说明 |
 |---|---|
-| 38 条，且含 `union-alpha` | 本包在服务，升级成功 |
-| 37 条，且无 `union-alpha` | **旧包还在服务**，本包已退场 |
+| 比基线多（`grok-4.7`、`hy3-preview` 等同族外 ID 也在） | 本包在服务，升级成功 |
+| 与基线一样少、且缺那些 ID | **旧包还在服务**，本包已退场 |
+
+具体条数会随网关上下线模型而变（2026-09-26 实测 43，基线同期更少），所以**不要记数量**。
+更稳的判据是**只在"同族外" ID 上体现的那条差异**：基线会把已知模型族之外的 ID 丢掉，
+本包会把它们自动适配到最接近的同族协议上。当前这类 ID 有 `grok-4.7`、`hy3-preview`、
+`space-bunny-free` 等（随时间变化）；它们出现在列表里就是本包在服务。
+
+插件注册路由时会写一行日志供排查，但注意它**只进 harness 的内存日志环形缓冲、不打印到终端**：
+
+```none
+llm-opencode-go: route "opencode-go" registered as OpenCode Go
+```
 
 确认修法：
 
 ```sh
 dsh plugin --profile web remove dsh-opencode-go
-dsh plugin --profile web add ./dsh-opencode-go-plus-0.3.0.tgz
+dsh plugin --profile web add ./dsh-opencode-go-plus-0.4.0.tgz
 ```
 
 <details>
@@ -214,9 +272,9 @@ dsh plugin --profile web add ./dsh-opencode-go-plus-0.3.0.tgz
 
 ### 提示 `opencode-go` 路由已被占用
 
-同一 profile 中只能有一个适配器提供 `opencode-go` 路由。如果已经通过其他插件或通用 pi-ai 配置接入 OpenCode Go，本插件会**自动改用 `opencode-go-plus` 路由**并在日志中说明，模型列表照常可用。想让插件重新占用 `opencode-go`，请先停用那一项配置（通常是删除 `settings.yaml` 里 `llm-pi-ai.providers.opencode-go` 整段）。
+同一 profile 中只能有一个适配器提供 `opencode-go` 路由。如果已经通过其他插件或通用 pi-ai 配置接入 OpenCode Go，本插件会**自动改用 `opencode-go-plus` 路由**并在日志中说明，模型列表照常可用。想让插件重新占用 `opencode-go`，请先停用那一项配置（通常是删掉 `llm-pi-ai.providers.opencode-go` 那段 —— `dsh <= 0.1.6` 在 `settings.yaml`，`dsh >= 0.1.7` 在 profile 的 `cordis.patch.yml`）。
 
-> 注意与上一条区分：路由被占用的原因是**通用 pi-ai 配置里的静态模型表**，本包会换个路由继续服务（模型数仍为 38）；而**基线包**被安装的原因是同名插件共存，本包会完全退场。
+> 注意与上一条区分：路由被占用的原因是**通用 pi-ai 配置里的静态模型表**，本包会换个路由继续服务（模型数不变）；而**基线包**被安装的原因是同名插件共存，本包会完全退场。
 
 ### 没有出现预期的模型
 
@@ -246,6 +304,49 @@ dsh plugin --profile headless remove dsh-opencode-go-plus
 ```
 
 ## 更新日志
+
+### 0.4.0
+
+**适配 `0.1.7` 系列（含桌面版 `0.1.7-rc.2`）的新设置模型，同时在 `0.1.6` 上保持原行为。**
+
+`0.3.0` 只支持一列车，用精确钉版 `peerDependencies` 把话说死。`0.1.7` 换了设置服务，
+钉版既匹配不上新版本、也不能表达"两列车都支持"，所以这次把兼容性做成**结构性**的：
+范围放宽 + 运行时探测 + 在真正变了的接口上分流。
+
+| 层 | 改动 |
+|---|---|
+| `package.json` | 版本 `0.3.0` → `0.4.0`；每个 `@deepseek-ai/dsh*` peer 拆成每列车一条 `>=0.1.6-alpha.1 <0.2.0-0 \|\| >=0.1.7-alpha.0 <0.2.0-0`；`schemastery` 从依赖（精确 `3.18.2`）改为 peer；`dsh-brand` 从 peer 改为依赖 |
+| `lib/index.js` | 设置注入分两条路（`installSection` / `configure`）；配置 schema 的 volatile 按**设置模块**判定；读配置统一走 `.get()` 投影；多处加能力探测 |
+| `cordis.patch.yml` | bundle entry id 从 `opencode-go-plus` 改为 `llm-opencode-go`，与新设置模型的"按 entry id 取配置"对齐（旧模型下这个值本来就是命名空间，两个模型因此共用同一个字符串） |
+| `docs/compatibility.md`、`scripts/compat-check.mjs` | 新增：支持矩阵与判据记录、导入面审计脚本 |
+
+**为什么 peer 范围要拆成两段。** dsh 启动器用
+`semver.satisfies(runtime, range, { includePrerelease: true })` 求值，预发布参与匹配，
+一段就够；但 npm / pnpm 自己的 peer 报告走常规 semver 规则 —— 带预发布标签的版本只有在
+比较符**同样带该 `major.minor.patch` 的预发布**时才满足。`>=0.1.6-alpha.1 <0.2.0` 和 `*`
+在常规规则下都匹配不上 `0.1.7-rc.2`，所以每列车各写一条，让两个读者都说真话。
+上界用 `<0.2.0-0`：预发布放开后 `<0.2.0` 会放进 `0.2.0-rc.1`。
+
+**为什么 `schemastery` 变成 peer。** 它原本是精确钉在 `3.18.2` 的依赖。依赖会在
+harness 那份旁边再装一份，插件连到哪份就成了包管理器的性质，而不是运行中 harness 的
+性质 —— 下面这个探测就会报告"那份副本"的能力，而不是宿主的。改成 peer 后它解析到
+宿主自己的那份，探测的结论才真的关于宿主。
+
+**踩到的坑，记在这里免得下次再踩：** volatile 字段的第一个版本是探
+`typeof schema.volatile === "function"`，理由是 `volatile()` 在 `0.1.6` 要的 `3.18.2`
+之后才加。**这个理由本身是错的** —— `0.1.6-alpha.2` 和 `0.1.7-rc.2` 都解析到
+`schemastery@3.18.4`，所以在 `0.1.6` 上探测也返回"有"，字段被包成 volatile，
+`SettingsProvider.register()` 随即拒绝它的 base
+（`ValidationError {"path":["enabled"]}`），**设置段静默消失而路由照常工作**——很难发现。
+现在判据是设置模块本身：它到 `0.1.6` 导出 `SettingsProvider`，从 `0.1.7` 起导出
+`SettingsForms`。
+
+**实测（2026-09-26，两列车各起一次隔离 profile）：** 两边的设置命名空间、可配置
+provider 目录行（`opencode-go-plus<-llm-opencode-go[]`）、路由注册（都是 `opencode-go`
+而非兜底的 `opencode-go-plus`）、模型数（43，同样的前三个 ID）与日志行全部一致。
+`compatibility.json` 清空为 `{}` 后 `0.1.7-rc.2` 依然正常加载 —— 也就是说
+`0.3.0` 时代那个必须手写的兼容性豁免，不再需要了。细节见
+[`docs/verification.md`](docs/verification.md) § 0.4.0。
 
 ### 0.3.0
 

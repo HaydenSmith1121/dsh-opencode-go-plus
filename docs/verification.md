@@ -9,6 +9,10 @@ records what was measured on the shipped artefact instead, and how to reproduce 
 Baseline of record: `dsh-opencode-go@0.1.2`. Its own `docs/verification.md`
 described its source repository and is not reproduced here.
 
+**The section below records 0.3.0** — one train, one settings model. The 0.4.0
+section at the end of this document records the same claims re-taken on both
+trains, and supersedes the 0.3.0 "Remaining limits" where they disagree.
+
 ## Environment
 
 | | |
@@ -203,3 +207,114 @@ the tree loads. Confirm by **count**: 38 including `union-alpha` is this package
 - The desktop shell and the `headless` profile were not exercised.
 - The live listing is a moving target: 38 is what the endpoint advertised on
   2026-09-17, and the counts drift as the gateway adds and retires models.
+
+## 0.4.0 — the same claims, on both release trains
+
+`0.3.0` supported one train and said so with an exact peer pin. `0.4.0` claims
+two, so the claims have to be taken twice, on two real harnesses rather than on
+two readings of a changelog. Both were taken on 2026-09-26.
+
+| | |
+|---|---|
+| `0.1.6` boot | `dsh 0.1.6-alpha.1`, profile `otg`, throwaway `DSH_HOME`, port 3097 |
+| `0.1.7` boot | `dsh 0.1.7-rc.2`, profile `web`, throwaway `DSH_HOME`, port 3098 |
+| Probe | a repository-external plugin mounting through the profile patch layer, reading `ctx.get("settings")`, `ctx.llm.listProviders()`, `listConfigurableProviders()`, `listModels()`, and the logger's ring buffer |
+| Credential | `OPENCODE_API_KEY` set to a placeholder. The model-list endpoint answers without a paid credential, which is why the live listing resolved; no completion was requested |
+
+### Measured, side by side
+
+| Observation | `0.1.6-alpha.1` | `0.1.7-rc.2` |
+|---|---|---|
+| `typeof ctx.get("settings").configure` | `undefined` | `function` |
+| `llm-opencode-go` in `ctx.settings.describe()` | **present** | **present** |
+| descriptor `autoGenerate` | absent (no such field) | `true` |
+| descriptor `value` | all nine fields, plain values | all nine fields, plain values |
+| `listProviders()` | `deepseek-official`, **`opencode-go`** | `deepseek-official`, `deepseek-account`, **`opencode-go`** |
+| our row in `listConfigurableProviders()` | `opencode-go-plus<-llm-opencode-go[]` | `opencode-go-plus<-llm-opencode-go[]` |
+| `ctx.llm.listModels("opencode-go")` | **43** | **43** |
+| first three ids | `minimax-m3, qwen3.8-flash, deepseek-v4-flash` | identical |
+| plugin log lines | route registered / adapted 15 / catalog resolved | identical |
+
+Both boots logged:
+
+```none
+llm-opencode-go: route "opencode-go" registered as OpenCode Go
+llm-opencode-go: adapted live ids the curated table does not describe onto their
+  family's protocol: minimax-m2.5, kimi-k2.5, glm-5, deepseek-flash,
+  qwen3.5-plus, mimo-v2-pro, mimo-v2-omni, mimo-v2.6-pro, mimo-v2.6-flash,
+  space-bunny-free, longcat-2.5-preview-free, hy3-preview, grok-4.5, grok-4.7,
+  gpt-6-luna
+llm-opencode-go: catalog resolved (curated 28, live listing 43, adapted 15, omitted 0, served 43)
+```
+
+The route lands on `opencode-go` — the preferred id, not the `opencode-go-plus`
+fallback — on both trains, even though `listConfigurableProviders()` shows a row
+for `opencode-go` owned by `dsh-llm-pi-ai`. A *row* is not a registration; that
+distinction is what lets this plugin claim the id. The curated/live split has
+moved since `0.3.0` (28/38/10 served → 28/43/15 served): the gateway added five
+models in the intervening nine days, which is the `autoDiscover` path doing the
+work it exists for.
+
+### The regression this round found, and the fix
+
+The first `0.4.0` cut marked its config fields volatile by probing the schema
+builder:
+
+```js
+var live = (schema) => typeof schema.volatile === "function" ? schema.volatile() : schema;
+```
+
+On `0.1.6` that is not a no-op. `schemastery@3.18.4` — the version *both* trains
+resolve — carries `volatile()`, so every field was wrapped, and
+`SettingsProvider.register()` rejected the base it was handed:
+
+```none
+0 {"options":{"path":["enabled"]},"name":"ValidationError"}
+```
+
+The plugin kept working and kept its route, which is what made the failure easy
+to miss: only the settings registration died. The observable difference is the
+namespace listing. Before the fix, on `0.1.6-alpha.1`:
+
+```none
+forms: [... 15 namespaces ...]          ← llm-opencode-go absent
+entryConfig: "absent"
+```
+
+and after it:
+
+```none
+forms: [... 15 namespaces ..., llm-opencode-go]   ← present
+entryConfig: {"value":{"enabled":true,"apiKeyEnv":"OPENCODE_API_KEY", ...}}
+```
+
+The fix moves the test from the schema builder to the settings module —
+`typeof dshSettings.SettingsForms === "function"` — because that is a fact about
+the release train rather than about a transitive dependency's version. See
+`docs/compatibility.md` § "Live fields".
+
+### Reproducing
+
+```sh
+# 0.1.7, the desktop release: a profile whose bundles end in this package
+DSH_HOME=<scratch> dsh web --port 3098 --no-open
+
+# 0.1.6: dsh-app-boot must be pinned back to alpha.1 or nothing boots — see the
+# note in docs/compatibility.md § "Known limits"
+cd <dsh-0.1.6-install> && npm install --no-save @deepseek-ai/dsh-app-boot@0.1.6-alpha.1
+DSH_HOME=<scratch> node node_modules/@deepseek-ai/dsh/lib/bin.js \
+  --profile otg --port 3097 --no-open
+
+# both: read the namespace listing, the directory, and the catalog
+node scripts/compat-check.mjs --modules <dsh-install>/node_modules
+```
+
+### Limits of this section
+
+- Two releases, both on Windows, both the `web` profile.
+- The settings form was confirmed through its descriptor, not by clicking in the
+  browser.
+- Nothing in either table was taken from a paid completion.
+- The `0.1.6` environment is `0.1.6-alpha.1` for `dsh` with `alpha.2` packages
+  beneath it (and `dsh-app-boot` pinned to `alpha.1`). That is as close to a
+  coherent `0.1.6` install as the published packages allow.

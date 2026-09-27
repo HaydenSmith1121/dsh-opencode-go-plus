@@ -31,7 +31,7 @@ export interface PiImageRequestBudget {
  * @param images - absent; selects the synchronous conversion.
  * @param onReplayDegrade - forwarded to {@link toPiAssistant} for each assistant message.
  * @returns the pi-ai context; `tools` is omitted when the request declares none.
- * @throws {LlmError} `UNSUPPORTED_CONTENT` for images in any history role, including a leading system message.
+ * @throws {LlmError} `UNSUPPORTED_CONTENT` for an image in a role that cannot carry one (a leading system or an assistant message). `user` and `tool` messages may carry images: the request image service resolves them, and an image inside a tool result rides that result's own pi-ai `toolResult` message.
  */
 export declare function toPiContext(options: GenerateOptions, images?: undefined, onReplayDegrade?: (reason: string) => void): PiContext;
 /**

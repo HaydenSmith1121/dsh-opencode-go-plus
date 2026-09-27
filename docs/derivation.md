@@ -135,7 +135,8 @@ the section (`apiKeyEnv`), so its dot reports the key the plugin actually uses.
   The cost of that choice is that the baseline cannot share a profile with this
   package; see `examples/migrate-from-fork.patch.yml` for the measured outcomes.
 - The only new setting key is `catalogAdditions`.
-- Request headers, replay behaviour, image handling, and usage reporting are untouched.
+- Request headers, replay behaviour, and usage reporting are untouched. Image
+  handling changed once, in 0.4.5, for the reason recorded below.
 
 ## Verifying a rebuild
 
@@ -226,3 +227,47 @@ clipboard paste could not be exercised in this environment — the automation
 session has no clipboard access — so paste is covered indirectly: no paste or key
 handler is registered, the field is enabled and writable, and onChange updates
 state.
+
+## 0.4.4 and 0.4.5 — the conversion layer meets the current session format
+
+Both releases fix the same inheritance problem: the conversion modules in
+`lib/index.js` came from the harness as it stood when the baseline was extracted,
+and the harness has moved since.
+
+0.4.4 repaired the bundled runtime's cold-start reasoning helpers (see
+`docs/verification.md`, "2026-09-27: cold-start reasoning model repair").
+
+0.4.5 repairs the history conversion. Session format v4 **retired the
+`tool-result` content wrapper**: a tool result is now its own `role: "tool"`
+message carrying raw blocks, which is what `createToolResultMessage` writes and
+what the harness's own pi-ai adapter reads back through its `toolResultOf`. The
+conversion here only knew the v3 shape — a wrapper nested inside a user message —
+so on `0.1.7-rc.2`:
+
+- a plain tool result was folded into a **user** turn, leaving the assistant's
+  tool call unanswered in the request; and
+- a tool result that carried an image threw, because the image-role guard
+  accepted only `user`:
+
+  ```none
+  LlmError: pi-ai cannot represent an image in an in-history tool message
+    code: UNSUPPORTED_CONTENT
+  ```
+
+The second one is reachable in normal use: `read_image` gates on the calling
+route's declared image input, and this adapter publishes the live catalog's
+modalities, so the tool is offered exactly when its result cannot come back. A
+recorded image is durable, so every later request in that session re-throws.
+
+The fix mirrors the harness's own adapter:
+
+- `assertSupportedImageRoles` accepts `tool` as well as `user`;
+- a `toolResultOf` helper rebuilds one pi-ai `toolResult` from a tool-role
+  message, carrying its `toolCallId`, its `toolName` recovered from the preceding
+  tool call, and — on the image path — the resolved image and its handle text;
+- both conversion paths take that branch for a `role: "tool"` message that does
+  not contain a nested wrapper, so the v3 shape keeps converting exactly as
+  before.
+
+`lib/types/conversion/context.d.ts` states the new rule; `scripts/conversion-test.mjs`
+pins all of it (see `docs/verification.md`).

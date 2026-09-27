@@ -340,3 +340,84 @@ The repaired installed plugin discovered 43 live models, included
 No credential is stored in this repository. Restart the desktop application to
 ensure its existing process releases the previous module instance, then select
 V4.1 Flash under the OpenCode Go provider.
+
+## 2026-09-27: tool-role tool results (0.4.5)
+
+| | |
+|---|---|
+| Date | 2026-09-27 |
+| OS | Windows |
+| Node | 24.18.0 |
+| Host under test | installed desktop runtime, root manifest `@deepseek-ai/dsh-desktop 0.1.7-rc.2` (read out of `app.asar`), with the tree at `.tmp/harness/dsh/node_modules` |
+
+The failure under test came from the desktop profile, not from a synthetic case:
+
+```none
+LlmError: pi-ai cannot represent an image in an in-history tool message
+  code: UNSUPPORTED_CONTENT
+```
+
+Session format v4 retired the `tool-result` content wrapper — `dsh-session-format-v3-to-v4`
+rejects it outright, and `createToolResultMessage` writes a `role: "tool"` message
+instead — while the conversion here still looked for the wrapper. Everything
+below was measured by driving the shipped bundle's own conversion entry point.
+
+`scripts/conversion-test.mjs` stages a copy of `lib/` in a temporary directory and
+appends the one export it needs, so the shipped API surface stays as declared; the
+staging directory is removed by the test.
+
+| Input | Before 0.4.5 | After 0.4.5 |
+|---|---|---|
+| `role: "tool"`, text only | folded into a **user** turn (the tool call left unanswered) | `toolResult` with `toolCallId` + recovered `toolName` |
+| `role: "tool"`, text **and** image | throws `UNSUPPORTED_CONTENT` | `toolResult` carrying the image and its handle text |
+| v3 wrapper nested in a user message | `toolResult` | `toolResult`, unchanged |
+| image on an assistant message | throws `UNSUPPORTED_CONTENT` | throws, unchanged |
+| tool image with no attachment service | throws (role guard fired first) | throws `pi-ai image conversion requires the durable attachment service` |
+
+Counts:
+
+```sh
+# after the fix
+node --test scripts/conversion-test.mjs                                        # 6 pass, 0 fail
+node --test scripts/runtime-test.mjs scripts/connection-test.mjs \
+  scripts/connection-host-test.mjs                                             # 29 pass, 0 fail
+node scripts/compat-check.mjs --modules .tmp/harness/dsh/node_modules          # OK
+```
+
+Before the fix the same conversion file ran 3 pass / 3 fail: the two tool-result
+cases and the attachment-service case. The v3 and assistant-image cases passed
+both ways, which is the point of keeping them.
+
+### Reproducing
+
+```sh
+HARNESS_TEST_MODULES=<dsh-install>/node_modules node --test scripts/conversion-test.mjs
+```
+
+Without `HARNESS_TEST_MODULES` the file falls back to `.tmp/harness/dsh/node_modules`
+inside the checkout and skips when neither exists, so a tarball consumer is
+unaffected.
+
+### The serializer side, read rather than run
+
+The conversion now *builds* a `toolResult` that carries an image; that is only
+half the claim, because the message the error named was rejected with "pi-ai
+cannot represent". Reading the vendored runtime (`lib/vendor/pi-ai.js`, pi-ai
+0.85.1) shows all three protocol serializers carrying it:
+
+| Protocol | Where the image goes |
+|---|---|
+| `anthropic-messages` | inside the `tool_result` block's own content (`convertToolResult`) |
+| `openai-completions` | the tool message is text (`"(see attached image)"` when there is no text) and the images follow as a user turn, `"Attached image(s) from tool result:"` + `image_url` parts |
+| `openai-responses` | `input_image` parts in the tool output (`convertToolResultOutput`) |
+
+That is what makes the fix more than a moved failure point. It was read from the
+bundle, not exercised against a gateway — see the limits below.
+
+### Limits of this section
+
+- Verified at the conversion boundary — the pi-ai `Context` this adapter builds —
+  not by a paid completion, and not through a gateway's request serialization.
+- The v3 wrapper case is synthetic by necessity: the installed harness no longer
+  produces that shape. It is kept so older sessions keep converting.
+- Windows only, and only the one host build named above.

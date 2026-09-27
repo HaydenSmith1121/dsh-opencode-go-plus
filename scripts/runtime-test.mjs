@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { once } from 'node:events';
+import { execFileSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { registerHooks } from 'node:module';
 import { resolve, join } from 'node:path';
@@ -103,4 +104,17 @@ test('Harness host: plugin imports and discovers existing and new model families
     assert.equal(snapshot.provider.id,'opencode-go');
     assert.ok(plugin.Config);
   } finally {hooks.deregister();}
+});
+
+test('cold bundle: reasoning levels work before any lazy protocol is loaded', () => {
+  const script = `
+    import assert from 'node:assert/strict';
+    const {getBuiltinModels, getSupportedThinkingLevels} = await import(${JSON.stringify(new URL('lib/vendor/pi-ai.js', root).href)});
+    const models = getBuiltinModels('opencode-go');
+    const flash = models.find(model => model.id === 'deepseek-v4-flash');
+    assert.ok(flash?.reasoning);
+    assert.deepEqual(getSupportedThinkingLevels(flash), ['off', 'low', 'high', 'max']);
+    for (const model of models) assert.ok(getSupportedThinkingLevels(model).length > 0);
+  `;
+  execFileSync(process.execPath, ['--input-type=module', '-e', script], { timeout: 10000, stdio: 'pipe' });
 });

@@ -318,3 +318,25 @@ node scripts/compat-check.mjs --modules <dsh-install>/node_modules
 - The `0.1.6` environment is `0.1.6-alpha.1` for `dsh` with `alpha.2` packages
   beneath it (and `dsh-app-boot` pinned to `alpha.1`). That is as close to a
   coherent `0.1.6` install as the published packages allow.
+
+## 2026-09-27: cold-start reasoning model repair
+
+The desktop profile had explicitly disabled `llm-opencode-go`. The local repair
+backs up `cordis.patch.yml`, removes the obsolete empty `llm-pi-ai` override, and
+enables the installed plugin again. Credentials remain in Harness's credential
+store.
+
+A real V4.1 Flash call exposed a separate bundled-runtime defect:
+`getSupportedThinkingLevels()` accessed `EXTENDED_THINKING_LEVELS` before its
+initializer ran. Re-exporting through pi-ai's side-effect-free root barrel while
+protocol modules also imported models lazily omitted the eager initialization.
+The build entry now directly re-exports model helpers from the pinned models.js
+implementation. This path is build-only; runtime still uses the bundled file.
+
+Validation: 29 protocol/connection/host tests pass, including a fresh-process
+regression that checks reasoning levels before any protocol stream initializes.
+The repaired installed plugin discovered 43 live models, included
+`deepseek-v4.1-flash`, and completed a real short request with the response `OK`.
+No credential is stored in this repository. Restart the desktop application to
+ensure its existing process releases the previous module instance, then select
+V4.1 Flash under the OpenCode Go provider.

@@ -343,6 +343,17 @@ dsh plugin --profile headless remove dsh-opencode-go-plus
 
 ## 更新日志
 
+### 0.4.4
+
+**修复 OpenCode Go 模型加载时报 `Cannot read properties of undefined (reading 'filter')`。**
+
+预编译协议模块在冷启动时可能遗漏思考档位列表的初始化，导致 V4.1 Flash 等支持思考的模型
+无法加载或发起请求。现在从固定版本的模型实现直接构建所需工具，确保首次使用前完成初始化。
+新增独立进程回归测试，覆盖尚未加载任何协议模块时读取思考档位的场景。
+
+已通过 29 项协议、连接及宿主测试，并通过插件实测 `deepseek-v4.1-flash` 返回回复。
+桌面版更新后请完全退出并重新打开 Harness，然后在 **OpenCode Go** 分组下选择模型。
+
 ### 0.4.3
 
 - 修复卡片一直停在“正在读取状态…”且密钥**粘贴不进输入框**的问题：输入框原先在

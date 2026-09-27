@@ -1,4 +1,7 @@
-export { createProvider, getSupportedThinkingLevels, isContextOverflow } from '@earendil-works/pi-ai';
+// Import the pinned implementation directly: the side-effect-free barrel can
+// lose models.js initialization when it is also reached by lazy protocol imports.
+export { createProvider, getSupportedThinkingLevels } from './node_modules/@earendil-works/pi-ai/dist/models.js';
+export { isContextOverflow } from '@earendil-works/pi-ai/utils/overflow';
 export { anthropicMessagesApi } from '@earendil-works/pi-ai/api/anthropic-messages.lazy';
 export { openAICompletionsApi } from '@earendil-works/pi-ai/api/openai-completions.lazy';
 export { openAIResponsesApi } from '@earendil-works/pi-ai/api/openai-responses.lazy';

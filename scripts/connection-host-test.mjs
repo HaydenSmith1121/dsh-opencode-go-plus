@@ -52,6 +52,7 @@ test('0.1.7 host: connection RPC mounts and manual refresh repairs route and mod
     key='fake-test-key'; // deliberately no event: manual refresh must repair state
     const state=await connection.refresh();
     assert.equal(state.connection,'ready');assert.equal(state.modelCount,2);
+    assert.deepEqual(await connection.status(),state,'a remounted Models card must retain the checked result');
     assert.equal(state.route,'opencode-go-plus');assert.equal(routes.has(state.route),true);
     await connection.refresh();assert.equal(modelRequests,2);assert.equal(directoryUpdates,2);
     key='';await connection.refresh();assert.equal(routes.has('opencode-go-plus'),false);

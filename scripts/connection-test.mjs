@@ -5,6 +5,36 @@ import { createConnectionStatus } from '../lib/connection-status.js';
 import { parseConnectionStatus, connectionRemote } from '../lib/connection-contract.js';
 import { ConnectionController } from './client/connection-controller.js';
 const base = { configured:true,writable:true,enabled:true,ref:'MY_GO_KEY',route:'opencode-go-plus',connection:'configured',modelCount:0,checkedAt:0,httpStatus:0 };
+test('refresh survives status events and a newly mounted card without another request',async()=>{
+  const {service,requests}=setup();
+  const checked=await service.refresh();
+  assert.equal(checked.connection,'ready');
+  assert.deepEqual(await service.status(),checked);
+  const card=new ConnectionController({status:()=>service.status()});
+  await card.read();
+  assert.deepEqual(card.state.status,checked);
+  assert.equal(requests(),1);
+  card.dispose();
+});
+test('cached verification is invalidated by credential and endpoint changes',async()=>{
+  let revision=0,baseURL='https://example.invalid/v1';
+  const {service}=setup({revision:()=>revision,config:()=>({apiKeyEnv:'MY_GO_KEY',baseURL,enabled:true})});
+  await service.refresh(); revision++;
+  assert.equal((await service.status()).connection,'configured');
+  await service.refresh(); baseURL='https://other.invalid/v1';
+  assert.equal((await service.status()).connection,'configured');
+});
+test('a failed recheck replaces earlier success, and removed credentials clear it',async()=>{
+  let code=200,configured=true;
+  const {service}=setup({describe:async()=>({configured,writable:true}),fetch:async()=>Response.json({usage:{ok:true}},{status:code})});
+  await service.refresh(); code=401;
+  await service.refresh();
+  assert.equal((await service.status()).connection,'unauthorized');
+  configured=false;
+  assert.equal((await service.status()).connection,'missing');
+  configured=true;
+  assert.equal((await service.status()).connection,'configured');
+});
 function setup(overrides={}) {
   let count=0;
   const options={config:()=>({apiKeyEnv:'MY_GO_KEY',baseURL:'https://example.invalid/v1',enabled:true}),describe:async()=>({configured:true,writable:true}),resolveApiKey:async()=>'secret-test-key',syncRoute:async()=>{},route:()=>base.route,headers:()=>({}),parseUsage:value=>assert.ok(value),refreshModels:async()=>({live:true,models:new Map([['test',{}]])}),fetch:async()=>{++count;return new Response(JSON.stringify({usage:{ok:true}}),{status:200});},...overrides};

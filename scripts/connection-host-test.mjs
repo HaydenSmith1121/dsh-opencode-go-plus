@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { registerHooks } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import { resolve, join } from 'node:path';
-test('0.1.7 host: connection RPC mounts and manual refresh repairs route and model catalog', {skip:!process.env.HARNESS_TEST_MODULES}, async()=>{
+test('Harness host: connection RPC mounts and manual refresh repairs route and model catalog', {skip:!process.env.HARNESS_TEST_MODULES}, async()=>{
   const hostUrl=pathToFileURL(join(resolve(process.env.HARNESS_TEST_MODULES),'../test-host.mjs')).href;
   const hook=registerHooks({resolve(specifier,context,next){return next(specifier,specifier.startsWith('@deepseek-ai/')?{...context,parentURL:hostUrl}:context);}});
   const {Context,Service}=await import('@deepseek-ai/cordis');

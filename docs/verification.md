@@ -421,3 +421,57 @@ bundle, not exercised against a gateway — see the limits below.
 - The v3 wrapper case is synthetic by necessity: the installed harness no longer
   produces that shape. It is kept so older sessions keep converting.
 - Windows only, and only the one host build named above.
+
+## 0.4.7 — Harness 0.2 compatibility (2026-09-28)
+
+Target: the installed Windows desktop distribution `0.2.0-rc.1` (build
+`62962ee48ef60ed1f97c10fffceb294eb3adf719`), extracted into an isolated test
+runtime. Tests ran with Node `24.18.0`; no user profile, credentials, sessions,
+or desktop application files were changed.
+
+The previous manifest rejected this host before plugin activation. Version
+0.4.7 adds `>=0.2.0-rc.1 <0.3.0-0` to every Harness peer and the direct
+`dsh-brand` dependency, preserving the existing 0.1.6/0.1.7 terms. The existing
+runtime capability probes passed the new-host checks without implementation
+changes or version exemptions.
+
+### Results
+
+Set `HARNESS_TEST_MODULES` to the extracted runtime's `dsh/node_modules`, then:
+
+```sh
+node --expose-internals --test scripts/runtime-test.mjs scripts/connection-host-test.mjs scripts/connection-test.mjs scripts/conversion-test.mjs scripts/harness-compat-test.mjs
+node scripts/compat-check.mjs --modules <runtime>/dsh/node_modules
+npm pack --ignore-scripts --dry-run --json
+```
+
+- **41 tests passed, 0 failed, 0 skipped** on `0.2.0-rc.1`.
+- The real launcher `evaluatePluginCompatibility` accepts the manifest with an
+  empty exemption map. Both launcher and npm semver checks accept the retained
+  old versions and `0.2.0-rc.1`, `0.2.0`, `0.2.1`. Earlier 0.2 prereleases and
+  the 0.3 train remain outside the range. Future version checks test only the
+  declared range, not their unavailable runtime behavior.
+- Real Cordis, LlmRuntime, TypertRegistry and gateway services mount the plugin,
+  preserve an existing `opencode-go` adapter, register `opencode-go-plus`,
+  discover a new model family, retain the checked connection status, and
+  withdraw the fallback route when its credential is removed.
+- Real SettingsForms projects the plugin's resolved volatile fields into an
+  editable form under `llm-opencode-go`. Profile storage and entry enumeration
+  use a fixture; the schema, activation and form projection use host code.
+- Local mock HTTP endpoints exercise OpenAI Completions, Responses and Anthropic
+  streaming; tool-result conversion covers both v3 nested and v4 standalone
+  messages, including image tool results.
+- The static host/client import audit passes on `0.2.0-rc.1` and the existing
+  `0.1.7-rc.2` package snapshot.
+- The package dry run succeeds as `dsh-opencode-go-plus@0.4.7`; no install/build
+  lifecycle script was added.
+
+### Limits
+
+This run did not restart or automate the desktop UI and did not send a paid
+completion or use a real API key. It does not assert compatibility with the
+other installed plugins. A full rerun on the older local snapshots was not
+possible: the 0.1.7 snapshot lacks external dependencies such as `yaml` and
+`zod`, and the 0.1.6 snapshots contain only selected packages. Their existing
+support declarations are preserved; historical boot evidence above remains
+separate from this release's new-host verification.

@@ -15,19 +15,20 @@ boot evidence; this document records the rules and the reasoning.
 `@deepseek-ai/dsh*` peer of this package is declared as:
 
 ```
->=0.1.6-alpha.1 <0.2.0-0 || >=0.1.7-alpha.0 <0.2.0-0
+>=0.1.6-alpha.1 <0.2.0-0 || >=0.1.7-alpha.0 <0.2.0-0 || >=0.2.0-rc.1 <0.3.0-0
 ```
 
 | Release | Status | What differs |
 |---|---|---|
 | `0.1.5-rc.3` and earlier | **not supported** | `@deepseek-ai/dsh-llm` predates the route-side image-offload API (`requiredImageOffload`, `projectOffloadedImages`, `IMAGE_OFFLOAD_REQUIRED_CODE`); the peer range refuses it |
 | `0.1.6-alpha.1`, `0.1.6-alpha.2` | supported; `alpha.1` is the baseline this fork was built against | **old settings model** (`settings.yaml` sections via `SettingsProvider.installSection`) |
-| `0.1.7-alpha.1` … `0.1.7-rc.2` | supported; `rc.2` is the current desktop release | **new settings model** (`SettingsForms`, profile-entry config, volatile fields) |
-| `0.2.0` and later | not claimed | the upper bound is `<0.2.0-0`, which also excludes `0.2.0` prereleases |
+| `0.1.7-alpha.1` … `0.1.7-rc.2` | supported; retains the existing 0.1.7 behavior | **new settings model** (`SettingsForms`, profile-entry config, volatile fields) |
+| `0.2.0-rc.1` and subsequent `0.2` releases | supported; tested on desktop runtime `0.2.0-rc.1` | same settings model; host integration and launcher checks pass |
+| earlier `0.2.0` prereleases, `0.3` and later | not claimed | the new term begins at `0.2.0-rc.1` and ends before `0.3.0-0` |
 
-### Why the range has two terms
+### Why the range has three terms
 
-DSP's own launcher evaluates this field with
+DSH's own launcher evaluates this field with
 `semver.satisfies(runtimeVersion, range, { includePrerelease: true })`
 (`@deepseek-ai/dsh-app-boot`, `evaluatePluginCompatibility`). Prereleases take
 part in ranges there, so a single term would be enough for the launcher — but
@@ -36,12 +37,14 @@ prerelease rule: a version carrying a prerelease tag satisfies a comparator set
 only when some comparator in that set carries a prerelease **at the same
 major.minor.patch**. Neither `>=0.1.6-alpha.1 <0.2.0` nor `*` matches
 `0.1.7-rc.2` under that rule, so one term per release train is what keeps both
-readers honest. `<0.2.0-0` is deliberate: it excludes `0.2.0-rc.1`, which
-`<0.2.0` would admit once prereleases are allowed.
+readers honest. The first two terms retain their `<0.2.0-0` boundary; the
+third explicitly admits `0.2.0-rc.1` and later `0.2` releases. Its
+`<0.3.0-0` boundary excludes the next minor train, including prereleases.
 
-`@deepseek-ai/cordis`, `@deepseek-ai/schemastery` and `@deepseek-ai/dsh-brand`
-are not range-checked by the launcher (`@deepseek-ai/dsh` or
-`@deepseek-ai/dsh-*` only), so they carry ordinary ranges.
+`@deepseek-ai/cordis` and `@deepseek-ai/schemastery` are not range-checked
+by the launcher (`@deepseek-ai/dsh` or `@deepseek-ai/dsh-*` peers only).
+`@deepseek-ai/dsh-brand` is a direct dependency rather than a peer; it follows
+the same release range so dependency resolution can also select its 0.2 build.
 
 ## The two settings models
 
@@ -223,10 +226,26 @@ node scripts/compat-check.mjs --modules <dsh-install>/node_modules   # text
 node scripts/compat-check.mjs --modules <dsh-install>/node_modules --json
 ```
 
-The behavioural check is a boot in a scratch home, which is how the numbers in
-`docs/verification.md` were taken.
+For the 0.4.7 regression suite, set `HARNESS_TEST_MODULES` to the installed
+host node_modules directory, then run:
+
+```sh
+node --expose-internals --test scripts/*-test.mjs
+```
+
+The suite checks real launcher compatibility (without exemptions), npm
+prerelease semantics, real LLM route collision/withdrawal, connection RPC,
+settings form projection, tool-result conversion and local streaming protocols.
+Earlier behavioural checks used a boot in a scratch home; see
+`docs/verification.md` for the evidence and limits of each run.
 
 ## Known limits
+
+- For 0.4.7, `0.2.0-rc.1` was tested using the installed desktop runtime in
+  isolation, real Cordis/LLM/RPC services, and real SettingsForms with a profile
+  storage fixture. This is not a full desktop or browser UI end-to-end test.
+  Later 0.2 releases are allowed by the range, not individually tested.
+- The following boot observations describe the earlier 0.4.0 verification.
 
 - Only the `web` profile was booted, on both trains. `headless`, `tui`, `acp`
   and `sdk` share the same bundles and the same `apply()`, but they were not
